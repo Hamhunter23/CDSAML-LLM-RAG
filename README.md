@@ -23,7 +23,7 @@ StoicStocks is a modern chatbot application that combines rule-based generation 
 1. Clone the repository:
    ```
    git clone https://github.com/Hamhunter23/CDSAML-LLM-RAG.git
-   cd aspirebot
+   cd stoicstocks
    ```
 
 2. Install the required Python packages:
