@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request, Response
+from flask import Flask, render_template, request, jsonify
 import weaviate
 import ollama
 import warnings
 import json
 import re
+from groq import Groq
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=ResourceWarning)
@@ -100,21 +101,39 @@ def rag_with_llm_response(user_input, use_context):
             context = "\n".join([result['content'] for result in processed_results[:15]])  # Use up to 15 chunks
             
             if source_folder:
-                prompt = f"Based on the following context from the folder {source_folder}, \n\nContext: {context}\n\nAnswer: {query}"
+                prompt = f"Based on the following context from the folder {source_folder}, \n\nContext: {context}\n\nAnswer: {user_input}"
             else:
-                prompt = f"Based on the following context, \n\nContext: {context}\n\nAnswer: {query}"
+                prompt = f"Based on the following context, \n\nContext: {context}\n\nAnswer: {user_input}"
+
+            client = Groq(api_key='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')
+            completion = client.chat.completions.create(
+                model="llama3-groq-70b-8192-tool-use-preview",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.5,
+                max_tokens=8192,
+                top_p=0.65,
+                stream=False,  # Wait for the entire response
+                stop=None,
+            )
             
-            yield " "
-            for chunk in ollama.generate(model="llama3:8b", prompt=prompt, stream=True):
-                yield chunk['response']
-        
+            return completion.choices[0].message.content
+
         finally:
             weaviate_client = None
     else:
         prompt = f"Answer the following query directly: {user_input}"
-        yield " "
-        for chunk in ollama.generate(model="llama3:8b", prompt=prompt, stream=True):
-            yield chunk['response']
+        client = Groq(api_key='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')
+        completion = client.chat.completions.create(
+            model="llama3-groq-70b-8192-tool-use-preview",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            max_tokens=8192,
+            top_p=0.65,
+            stream=False,  # Wait for the entire response
+            stop=None,
+        )
+        
+        return completion.choices[0].message.content
 
 @app.route('/')
 def index():
@@ -127,9 +146,10 @@ def chat():
     intent = identify_intent(user_message)
     
     if intent:
-        return Response(json.dumps({'response': responses[intent]}), mimetype='application/json')
+        return jsonify({'response': responses[intent]})
     else:
-        return Response(rag_with_llm_response(user_message, use_context), mimetype='text/event-stream')
+        response = rag_with_llm_response(user_message, use_context)
+        return jsonify({'response': response})
 
 if __name__ == '__main__':
     app.run(debug=True)
